@@ -119,7 +119,7 @@ def _get_javab64_xref(_class, _vmx):
 
 def _check_trust_manager(_method, _vm, _vmx):
 	_check_server_trusted = {'access_flags' : 'public', 'return' : 'void', 'name' : 'checkServerTrusted', 'params' : ['java.security.cert.X509Certificate[]', 'java.lang.String']}
-	_trustmanager_interfaces = {'Ljavax/net/ssl/TrustManager;', 'Ljavax/net/ssl/X509TrustManager;'}
+	_trustmanager_interfaces = ['Ljavax/net/ssl/TrustManager;', 'Ljavax/net/ssl/X509TrustManager;']
 	_custom_trust_manager = []
 	_insecure_socket_factory = []
 	
