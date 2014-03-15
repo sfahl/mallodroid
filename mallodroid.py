@@ -247,7 +247,7 @@ def _print_result(_result, _java=True):
 			print "\tCustom HostnameVerifiers is implemented in class {:s}".format(_translate_class_name(_class_name))
 			if _hv['empty']:
 				print "\tImplements naive hostname verification. This HostnameVerifier breaks certificate validation!"
-			for _ref in _tm['xref']:
+			for _ref in _hv['xref']:
 				print "\t\tReferenced in method {:s}->{:s}".format(_translate_class_name(_ref.get_class_name()), _ref.get_name())
 			if _java:
 				print "\t\tJavaSource code:"
@@ -265,6 +265,23 @@ def _print_result(_result, _java=True):
 		if _java:
 			print "\t\tJavaSource code:"
 			print "{:s}".format(base64.b64decode(_aa['java_b64']))
+			
+	if len(_result['onreceivedsslerror']) > 0:
+		if len(_result['onreceivedsslerror']) == 1:
+			print "App extends WebViewClient:"
+		elif len(_result['onreceivedsslerror']) > 1:
+			print "App extends {:d} WebViewClients".format(len(_result['onreceivedsslerror']))
+
+		for _se in _result['onreceivedsslerror']:
+			_class_name = _se['class'].get_name()
+			print "\tWebViewClient is extended in class {:s}".format(_translate_class_name(_class_name))
+			if _se['empty']:
+				print "\tImplements naive ssl-error handling. This WebViewClient breaks certificate validation!"
+			for _ref in _se['xref']:	
+				print "\t\tReferenced in method {:s}->{:s}".format(_translate_class_name(_ref.get_class_name()), _ref.get_name())
+			if _java:
+				print "\t\tJavaSource code:"
+				print "{:s}".format(base64.b64decode(_se['java_b64']))
 
 def _xml_result(_a, _result):
 	from xml.etree.ElementTree import Element, SubElement, tostring, dump
