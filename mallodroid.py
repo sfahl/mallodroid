@@ -401,7 +401,7 @@ def main():
 	_vm = dvm.DalvikVMFormat(_a.get_dex())
 	_vmx = uVMAnalysis(_vm)
 	
-	if 'INTERNET' in _vmx.get_permissions([]):
+	if 'android.permission.INTERNET' in _vmx.get_permissions([]):
 		print "App requires INTERNET permission. Continue analysis..."
 		
 		_vm.create_python_export()
