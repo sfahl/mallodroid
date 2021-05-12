@@ -19,21 +19,16 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with MalloDroid.  If not, see <http://www.gnu.org/licenses/>.
 """
+import sys
 
-from androguard.core.bytecodes import apk, dvm
-from androguard.core.analysis import analysis
 from androguard.decompiler.dad import decompile
-from androguard.core.bytecodes.dvm import DalvikVMFormat
-from androguard.core.bytecodes.apk import APK
-from androguard.core.analysis.analysis import Analysis
 from androguard.core.analysis.analysis import ClassAnalysis
 
-import sys
 import os
 import base64
-import pprint
-import datetime
 import argparse
+
+from androguard.misc import AnalyzeAPK
 
 
 def _get_java_code(_class, _vmx):
@@ -51,7 +46,6 @@ def _has_signature(_method, _signatures):
     _return = _method.get_information().get('return', None)
     _params = [_p[1] for _p in _method.get_information().get('params', [])]
     _access_flags = _method.get_access_flags_string()
-
     for _signature in _signatures:
         if (_access_flags == _signature['access_flags']) \
                 and (_name == _signature['name']) \
@@ -62,7 +56,7 @@ def _has_signature(_method, _signatures):
 
 
 def _class_implements_interface(_class, _interfaces):
-    return (_class.get_interfaces() and any([True for i in _interfaces if i in _class.get_interfaces()]))
+    return _class.get_interfaces() and any([True for i in _interfaces if i in _class.get_interfaces()])
 
 
 def _class_extends_class(_class, _classes):
@@ -163,12 +157,11 @@ def _check_hostname_verifier(_method, _vm, _vmx):
                                'params': ['java.lang.String', 'java.lang.String[]', 'java.lang.String[]']}
     _verifier_interfaces = ['Ljavax/net/ssl/HostnameVerifier;', 'Lorg/apache/http/conn/ssl/X509HostnameVerifier;']
     _verifier_classes = ['L/org/apache/http/conn/ssl/AbstractVerifier;',
-                         'L/org/apache/http/conn/ssl/AllowAllHostnameVerifier;', \
+                         'L/org/apache/http/conn/ssl/AllowAllHostnameVerifier;',
                          'L/org/apache/http/conn/ssl/BrowserCompatHostnameVerifier;',
                          'L/org/apache/http/conn/ssl/StrictHostnameVerifier;']
     _custom_hostname_verifier = []
     _allow_all_hostname_verifier = []
-
     if _has_signature(_method, [_verify_string_sslsession, _verify_string_x509cert, _verify_string_sslsocket,
                                 _verify_string_subj_alt]):
         _class = _vm.get_class(_method.get_class_name())
@@ -202,7 +195,7 @@ def _check_ssl_error(_method, _vm, _vmx):
     return _custom_on_received_ssl_error
 
 
-def _check_all(_vm, _vmx):
+def _check_all(_vms, _vmx):
     _custom_trust_manager = []
     _insecure_socket_factory = []
 
@@ -210,23 +203,23 @@ def _check_all(_vm, _vmx):
     _allow_all_hostname_verifier = []
 
     _custom_on_received_ssl_error = []
+    for _vm in _vms:
+        for _method in _vm.get_methods():
+            _hv, _a = _check_hostname_verifier(_method, _vm, _vmx)
+            if len(_hv) > 0:
+                _custom_hostname_verifier += _hv
+            if len(_a) > 0:
+                _allow_all_hostname_verifier += _a
 
-    for _method in _vm.get_methods():
-        _hv, _a = _check_hostname_verifier(_method, _vm, _vmx)
-        if len(_hv) > 0:
-            _custom_hostname_verifier += _hv
-        if len(_a) > 0:
-            _allow_all_hostname_verifier += _a
+            _tm, _i = _check_trust_manager(_method, _vm, _vmx)
+            if len(_tm) > 0:
+                _custom_trust_manager += _tm
+            if len(_i) > 0:
+                _insecure_socket_factory += _i
 
-        _tm, _i = _check_trust_manager(_method, _vm, _vmx)
-        if len(_tm) > 0:
-            _custom_trust_manager += _tm
-        if len(_i) > 0:
-            _insecure_socket_factory += _i
-
-        _ssl = _check_ssl_error(_method, _vm, _vmx)
-        if len(_ssl) > 0:
-            _custom_on_received_ssl_error += _ssl
+            _ssl = _check_ssl_error(_method, _vm, _vmx)
+            if len(_ssl) > 0:
+                _custom_on_received_ssl_error += _ssl
 
     return {'trustmanager': _custom_trust_manager, 'insecuresocketfactory': _insecure_socket_factory,
             'customhostnameverifier': _custom_hostname_verifier,
@@ -321,8 +314,8 @@ def _print_result(_result, _java=True):
                 print("{:s}".format(base64.b64decode(_se['java_b64'])))
 
 
-def _xml_result(_a, _result):
-    from xml.etree.ElementTree import Element, SubElement, tostring, dump
+def _xml_result(_a, _result, printed=True, file=None):
+    from xml.etree.ElementTree import Element, SubElement, tostring
     import xml.dom.minidom
 
     _result_xml = Element('result')
@@ -330,8 +323,8 @@ def _xml_result(_a, _result):
     _tms = SubElement(_result_xml, 'trustmanagers')
     _hvs = SubElement(_result_xml, 'hostnameverifiers')
     _orse = SubElement(_result_xml, 'onreceivedsslerrors')
-
-    print("\nXML output:\n")
+    if printed:
+        print("\nXML output:\n")
 
     for _tm in _result['trustmanager']:
         _class_name = _translate_class_name(_tm['class'].get_name())
@@ -394,7 +387,11 @@ def _xml_result(_a, _result):
             _ss.set('method', _ref.get_name())
 
     _xml = xml.dom.minidom.parseString(tostring(_result_xml, method="xml"))
-    print(_xml.toprettyxml())
+    if file:
+        with open(file, 'w') as out:
+            out.write(_xml.toprettyxml())
+    if printed:
+        print(_xml.toprettyxml())
 
 
 def _translate_class_name(_class_name):
@@ -415,71 +412,79 @@ def _ensure_dir(_d):
         os.makedirs(d)
 
 
-def _store_java(_vm, _args):
-    _vmx = Analysis(_vm)
-    _vmx.create_xref()
-    _vm.set_vmanalysis(_vmx)
-    _vm.create_python_export()
-    # _vm.create_dref(_vmx)
-
-    for _class in _vm.get_classes():
-        try:
-            _ms = decompile.DvClass(_class, _vmx)
-            _ms.process()
-            _f = _file_name(_class.get_name(), _args.dir)
-            _ensure_dir(_f)
-            with open(_f, "w") as f:
-                _java = str(_ms.get_source())
-                f.write(_java)
-        except Exception as e:
-            print(("Could not process {:s}: {:s}".format(_class.get_name(), str(e))))
+def _store_java(_vmx, _vms, _args):
+    for _vm in _vms:
+        for _class in _vm.get_classes():
+            try:
+                _ms = decompile.DvClass(_class, _vmx)
+                _ms.process()
+                _f = _file_name(_class.get_name(), _args.dir)
+                _ensure_dir(_f)
+                with open(_f, "w") as f:
+                    _java = str(_ms.get_source())
+                    f.write(_java)
+            except Exception as e:
+                print(("Could not process {:s}: {:s}".format(_class.get_name(), str(e))))
 
 
-def _parseargs():
+def _parseargs(args=None):
     parser = argparse.ArgumentParser(description="Analyse Android Apps for broken SSL certificate validation.")
     parser.add_argument("-f", "--file", help="APK File to check", type=str, required=True)
     parser.add_argument("-j", "--java", help="Show Java code for results for non-XML output", action="store_true",
                         required=False)
+
     parser.add_argument("-x", "--xml", help="Print XML output", action="store_true", required=False)
+    parser.add_argument("-o", "--output", help="Output file (XML FORMAT)", type=str,
+                        required=False)
     parser.add_argument("-d", "--dir", help="Store decompiled App's Java code for further analysis in dir", type=str,
                         required=False)
-    args = parser.parse_args()
+    args = parser.parse_args(args)
 
     return args
 
 
-def main():
-    _args = _parseargs()
+def main(args=None, stdout_suppress=False, stderr_suppress=False):
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = devnull if stdout_suppress else sys.stdout
+        sys.stderr = devnull if stderr_suppress else sys.stderr
+        results = None
+        try:
+            if args and not isinstance(args, list):
+                raise TypeError(f"Args are {type(args)}, which is not a list.")
+            _args = _parseargs(args)
+            _a, _vm, _vmx = AnalyzeAPK(_args.file)
 
-    _a = apk.APK(_args.file)
-    print(("Analyse file: {:s}".format(_args.file)))
-    print(("Package name: {:s}".format(_a.get_package())))
+            print(("Analyse file: {:s}".format(_args.file)))
+            print(("Package name: {:s}".format(_a.get_package())))
 
-    # print("Output : {}".format(_a.get_dex()))
-    _vm = dvm.DalvikVMFormat(_a.get_dex())
-    _vmx = Analysis(_vm)
+            if 'android.permission.INTERNET' in _a.get_permissions():
+                print("App requires INTERNET permission. Continue analysis...")
 
-    if 'android.permission.INTERNET' in _a.get_permissions():
-        print("App requires INTERNET permission. Continue analysis...")
+                _result = {'trustmanager': [], 'hostnameverifier': [], 'onreceivedsslerror': []}
+                _result = _check_all(_vm, _vmx)
+                results = _result
+                if not _args.xml and not _args.output:
+                    _print_result(_result, _java=_args.java)
+                else:
+                    _xml_result(_a, _result, printed=True if _args.xml else False,
+                                file=_args.output if _args.output else None)
 
-        _vmx.create_xref()
-        _vm.set_vmanalysis(_vmx)
-        _vm.create_python_export()
-        # _vm.create_dref(_vmx)
+                if _args.dir:
+                    print("Store decompiled Java code in {:s}".format(_args.dir))
+                    _store_java(_vmx, _vm, _args)
+            else:
+                print("App does not require INTERNET permission. No need to worry about SSL misuse... Abort!")
 
-        _result = {'trustmanager': [], 'hostnameverifier': [], 'onreceivedsslerror': []}
-        _result = _check_all(_vm, _vmx)
-
-        if not _args.xml:
-            _print_result(_result, _java=_args.java)
-        else:
-            _xml_result(_a, _result)
-
-        if _args.dir:
-            print("Store decompiled Java code in {:s}".format(_args.dir))
-            _store_java(_vm, _args)
-    else:
-        print("App does not require INTERNET permission. No need to worry about SSL misuse... Abort!")
+        except:
+            import traceback
+            # printing stack trace
+            traceback.print_exc()
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            return results
 
 
 if __name__ == "__main__":
