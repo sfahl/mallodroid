@@ -25,7 +25,7 @@ from androguard.core.analysis import analysis
 from androguard.decompiler.dad import decompile
 from androguard.core.bytecodes.dvm import DalvikVMFormat
 from androguard.core.bytecodes.apk import APK
-from androguard.core.analysis.analysis import uVMAnalysis
+from androguard.core.analysis.analysis import Analysis
 from androguard.core.analysis.ganalysis import GVMAnalysis
 
 import sys
@@ -40,8 +40,8 @@ def _get_java_code(_class, _vmx):
 		_ms = decompile.DvClass(_class, _vmx)
 		_ms.process()
 		return _ms.get_source()
-	except Exception, e:
-		print "Error getting Java source code for: {:s}".format(_class.get_name())
+	except Exception as e:
+		print("Error getting Java source code for: {:s}".format(_class.get_name()))
 	return None
 
 def _has_signature(_method, _signatures):
@@ -191,7 +191,7 @@ def _check_all(_vm, _vmx, _gx):
 		if len(_a) > 0:
 			_allow_all_hostname_verifier += _a
 
- 		_tm, _i = _check_trust_manager(_method, _vm, _vmx)
+		_tm, _i = _check_trust_manager(_method, _vm, _vmx)
 		if len(_tm) > 0:
 			_custom_trust_manager += _tm
 		if len(_i) > 0:
@@ -204,67 +204,67 @@ def _check_all(_vm, _vmx, _gx):
 	return { 'trustmanager' : _custom_trust_manager, 'insecuresocketfactory' : _insecure_socket_factory, 'customhostnameverifier' : _custom_hostname_verifier, 'allowallhostnameverifier' : _allow_all_hostname_verifier, 'onreceivedsslerror' : _custom_on_received_ssl_error}
 
 def _print_result(_result, _java=True):
-	print "Analysis result:"
+	print("Analysis result:")
 	
 	if len(_result['trustmanager']) > 0:
 		if len(_result['trustmanager']) == 1:
-			print "App implements custom TrustManager:"
+			print("App implements custom TrustManager:")
 		elif len(_result['trustmanager']) > 1:
-			print "App implements {:d} custom TrustManagers".format(len(_result['trustmanager']))
+			print("App implements {:d} custom TrustManagers".format(len(_result['trustmanager'])))
 			
 		for _tm in _result['trustmanager']:
 			_class_name = _tm['class'].get_name()
-			print "\tCustom TrustManager is implemented in class {:s}".format(_translate_class_name(_class_name))
+			print("\tCustom TrustManager is implemented in class {:s}".format(_translate_class_name(_class_name)))
 			if _tm['empty']:
-				print "\tImplements naive certificate check. This TrustManager breaks certificate validation!"
+				print("\tImplements naive certificate check. This TrustManager breaks certificate validation!")
 			for _ref in _tm['xref']:
-				print "\t\tReferenced in method {:s}->{:s}".format(_translate_class_name(_ref.get_class_name()), _ref.get_name())
+				print("\t\tReferenced in method {:s}->{:s}".format(_translate_class_name(_ref.get_class_name()), _ref.get_name()))
 			if _java:
-				print "\t\tJavaSource code:"
-				print "{:s}".format(base64.b64decode(_tm['java_b64']))
+				print("\t\tJavaSource code:")
+				print("{:s}".format(base64.b64decode(_tm['java_b64'])))
 	
 	if len(_result['insecuresocketfactory']) > 0:
 		if len(_result['insecuresocketfactory']) == 1:
-			print "App instantiates insecure SSLSocketFactory:"
+			print("App instantiates insecure SSLSocketFactory:")
 		elif len(_result['insecuresocketfactory']) > 1:
-			print "App instantiates {:d} insecure SSLSocketFactorys".format(len(_result['insecuresocketfactory']))
+			print("App instantiates {:d} insecure SSLSocketFactorys".format(len(_result['insecuresocketfactory'])))
 		
 		for _is in _result['insecuresocketfactory']:
 			_class_name = _translate_class_name(_is['class'].get_name())
-			print "\tInsecure SSLSocketFactory is instantiated in {:s}->{:s}".format(_class_name, _is['method'].get_name())
+			print("\tInsecure SSLSocketFactory is instantiated in {:s}->{:s}".format(_class_name, _is['method'].get_name()))
 			if _java:
-				print "\t\tJavaSource code:"
-				print "{:s}".format(base64.b64decode(_is['java_b64']))
+				print("\t\tJavaSource code:")
+				print("{:s}".format(base64.b64decode(_is['java_b64'])))
 
 	if len(_result['customhostnameverifier']) > 0:
 		if len(_result['customhostnameverifier']) == 1:
-			print "App implements custom HostnameVerifier:"
+			print("App implements custom HostnameVerifier:")
 		elif len(_result['customhostnameverifier']) > 1:
-			print "App implements {:d} custom HostnameVerifiers".format(len(_result['customhostnameverifier']))
+			print("App implements {:d} custom HostnameVerifiers".format(len(_result['customhostnameverifier'])))
 
 		for _hv in _result['customhostnameverifier']:
 			_class_name = _hv['class'].get_name()
-			print "\tCustom HostnameVerifiers is implemented in class {:s}".format(_translate_class_name(_class_name))
+			print("\tCustom HostnameVerifiers is implemented in class {:s}".format(_translate_class_name(_class_name)))
 			if _hv['empty']:
-				print "\tImplements naive hostname verification. This HostnameVerifier breaks certificate validation!"
+				print("\tImplements naive hostname verification. This HostnameVerifier breaks certificate validation!")
 			for _ref in _tm['xref']:
-				print "\t\tReferenced in method {:s}->{:s}".format(_translate_class_name(_ref.get_class_name()), _ref.get_name())
+				print("\t\tReferenced in method {:s}->{:s}".format(_translate_class_name(_ref.get_class_name()), _ref.get_name()))
 			if _java:
-				print "\t\tJavaSource code:"
-				print "{:s}".format(base64.b64decode(_hv['java_b64']))
+				print("\t\tJavaSource code:")
+				print("{:s}".format(base64.b64decode(_hv['java_b64'])))
 
 	if len(_result['allowallhostnameverifier']) > 0:
 		if len(_result['allowallhostnameverifier']) == 1:
-			print "App instantiates AllowAllHostnameVerifier:"
+			print("App instantiates AllowAllHostnameVerifier:")
 		elif len(_result['allowallhostnameverifier']) > 1:
-			print "App instantiates {:d} AllowAllHostnameVerifiers".format(len(_result['allowallhostnameverifier']))
+			print("App instantiates {:d} AllowAllHostnameVerifiers".format(len(_result['allowallhostnameverifier'])))
 
 		for _aa in _result['allowallhostnameverifier']:
 			_class_name = _translate_class_name(_aa['class'].get_name())
-			print "\tAllowAllHostnameVerifier is instantiated in {:s}->{:s}".format(_class_name, _aa['method'].get_name())
+			print("\tAllowAllHostnameVerifier is instantiated in {:s}->{:s}".format(_class_name, _aa['method'].get_name()))
 		if _java:
-			print "\t\tJavaSource code:"
-			print "{:s}".format(base64.b64decode(_aa['java_b64']))
+			print("\t\tJavaSource code:")
+			print("{:s}".format(base64.b64decode(_aa['java_b64'])))
 
 def _xml_result(_a, _result):
 	from xml.etree.ElementTree import Element, SubElement, tostring, dump
@@ -276,7 +276,7 @@ def _xml_result(_a, _result):
 	_hvs = SubElement(_result_xml, 'hostnameverifiers')
 	_orse = SubElement(_result_xml, 'onreceivedsslerrors')
 
-	print "\nXML output:\n"
+	print("\nXML output:\n")
 
 	for _tm in _result['trustmanager']:
 		_class_name = _translate_class_name(_tm['class'].get_name())
@@ -341,7 +341,7 @@ def _xml_result(_a, _result):
 		
 	
 	_xml = xml.dom.minidom.parseString(tostring(_result_xml, method="xml"))
-	print _xml.toprettyxml()
+	print(_xml.toprettyxml())
 
 def _translate_class_name(_class_name):
 	_class_name = _class_name[1:-1]
@@ -376,7 +376,7 @@ def _store_java(_vm, _args):
 			with open(_f, "w") as f:
 				_java = str(_ms.get_source())
 				f.write(_java)
-		except Exception, e:
+		except Exception as e:
 			print("Could not process {:s}: {:s}".format(_class.get_name(), str(e)))
 
 
@@ -402,7 +402,7 @@ def main():
 	_vmx = uVMAnalysis(_vm)
 	
 	if 'INTERNET' in _vmx.get_permissions([]):
-		print "App requires INTERNET permission. Continue analysis..."
+		print("App requires INTERNET permission. Continue analysis...")
 		
 		_vm.create_python_export()
 		_gx = GVMAnalysis(_vmx, None)
@@ -421,10 +421,10 @@ def main():
 			_xml_result(_a, _result)
 		
 		if _args.dir:
-			print "Store decompiled Java code in {:s}".format(_args.dir)
+			print("Store decompiled Java code in {:s}".format(_args.dir))
 			_store_java(_vm, _args)
 	else:
-		print "App does not require INTERNET permission. No need to worry about SSL misuse... Abort!"
+		print("App does not require INTERNET permission. No need to worry about SSL misuse... Abort!")
 
 if __name__ == "__main__":
 	main()
